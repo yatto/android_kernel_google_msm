@@ -972,5 +972,11 @@ config TOUCHSCREEN_ELAN_TF_3K
         help
           To compile this driver as a module, choose M here: the
           module will be called atmel_tsadcc.
+
+config STATE_NOTIFIER
+        bool "State Notifier"
+	depends on TOUCHSCREEN_ELAN_TF_3K
+	default y
+
 endif
 

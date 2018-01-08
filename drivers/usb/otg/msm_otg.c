@@ -413,6 +413,9 @@ static void ulpi_init(struct msm_otg *motg)
 			} else if(machine_is_apq8064_deb()) {
                                 printk(KERN_INFO"Host mode: Set DC level as 0x61 for deb.\n");
                                 ulpi_write(&motg->phy, 0x61, seq[1]);
+			} else if(machine_is_apq8064_duma()) {
+                                printk(KERN_INFO"Host mode: Set DC level seq[1]=%x\n",seq[1]);
+                                ulpi_write(&motg->phy, 0x61, seq[1]);
 			}
 		} else {
 			ulpi_write(&motg->phy, seq[0], seq[1]);

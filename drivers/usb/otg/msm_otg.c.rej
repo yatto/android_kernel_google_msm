@@ -1,0 +1,20 @@
+--- drivers/usb/otg/msm_otg.c
++++ drivers/usb/otg/msm_otg.c
+@@ -1246,12 +1249,13 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
+ 		return;
+ #ifdef CONFIG_FORCE_FAST_CHARGE
+ 	if (force_fast_charge == 1) {
+-			mA = USB_FASTCHG_LOAD;
+-			pr_info("USB fast charging is ON - 1000mA.\n");
++		mA = USB_FASTCHG_LOAD;
++		pr_info("USB fast charging if ON - 1000mA.\n");
+ 	} else {
+-		pr_info("USB fast charging is OFF.\n");
+-	}
++		pr_info("USB fast chargin if OFF.\n");
++	}	
+ #endif
++
+ 	dev_info(motg->phy.dev, "Avail curr from USB = %u\n", mA);
+ 
+ 	pm8921_charger_vbus_draw(mA);
