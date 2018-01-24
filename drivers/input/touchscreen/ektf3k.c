@@ -184,6 +184,7 @@ static int __fw_packet_handler(struct i2c_client *client, int imediate);
 static int elan_ktf3k_ts_rough_calibrate(struct i2c_client *client);
 static int elan_ktf3k_ts_hw_reset(struct i2c_client *client, unsigned int time);
 static int elan_ktf3k_ts_resume(struct i2c_client *client);
+static void update_power_source(void);
 
 #ifdef FIRMWARE_UPDATE_WITH_HEADER
 static int firmware_update_header(struct i2c_client *client, unsigned char *firmware, unsigned int page_number);
@@ -211,6 +212,8 @@ static int debug = DEBUG_INFO;
 			printk("[ektf3k]:" __VA_ARGS__); \
 	} while (0)
 
+
+static int parrot_mod = 1;   /* ParrotGeek MOD Sysfs interface. We start with ENABLED status */
 
 int elan_iap_open(struct inode *inode, struct file *filp){ 
 	touch_debug(DEBUG_INFO, "[ELAN]into elan_iap_open\n");
@@ -412,9 +415,34 @@ static ssize_t elan_show_status(struct device *dev, struct device_attribute *dev
 
 DEVICE_ATTR(elan_touchpanel_status, S_IRUGO, elan_show_status, NULL);
 
+/* ParrotGeek Mod sysfs interface */
+static ssize_t elan_ktf3k_parrot_mod_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	size_t count = 0;
+	count += sprintf(buf, "%d\n", parrot_mod);
 
+	return count;
+}
 
+static ssize_t elan_ktf3k_parrot_mod_dump(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+	sscanf(buf, "%d ", &val);
+	if (val < 0 || val > 1)
+		val = 0;
 
+	if (parrot_mod != val) {
+		parrot_mod = val;
+		update_power_source();
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR(parrot_mod, (S_IWUSR|S_IRUGO),
+       elan_ktf3k_parrot_mod_show, elan_ktf3k_parrot_mod_dump);
+
+/* End ParrotGeek Mod sysfs interface */
 
 static int check_fw_version(const unsigned char*firmware, unsigned int size, int fw_version){
        int id, version;
@@ -496,6 +524,9 @@ static struct attribute *elan_attr[] = {
 	&dev_attr_gpio.attr,
 // Renable forced firmware update through sysfs
 	&dev_attr_update_fw.attr,
+/* ParrotGeek Mod Sysfs interface */	
+	&dev_attr_parrot_mod.attr,
+/* End ParrotGeek Mod Sysfs interface */
 	NULL
 };
 
@@ -525,7 +556,13 @@ static int elan_ktf3k_touch_sysfs_init(void)
 		return ret;
 	}
 */
-
+/* ParrotGeek Mod Sysfs interface */
+        ret = sysfs_create_file(android_touch_kobj, &dev_attr_parrot_mod.attr);
+	if (ret) {
+		touch_debug(DEBUG_ERROR, "[elan]%s: sysfs_create_group failed\n", __func__);
+		return ret;
+        }
+/* End ParrotGeek Mod Sysfs interface */
 	return 0 ;
 }
 
@@ -533,7 +570,9 @@ static void elan_touch_sysfs_deinit(void)
 {
 //	sysfs_remove_file(android_touch_kobj, &dev_attr_vendor.attr);
 //	sysfs_remove_file(android_touch_kobj, &dev_attr_gpio.attr);
-
+/* ParrotGeek Mod Sysfs interface */	
+	sysfs_remove_file(android_touch_kobj, &dev_attr_parrot_mod.attr);
+/* End ParrotGeek Mod Sysfs interface */
 	kobject_del(android_touch_kobj);
 }
 
@@ -946,10 +985,15 @@ static int elan_ktf3k_ts_get_power_source(struct i2c_client *client)
 */
 
 static void update_power_source(void){
-      //unsigned power_source = now_usb_cable_status;
+      unsigned power_source = now_usb_cable_status;
       if(private_ts == NULL || work_lock) return;
 	// Send power state 1 if USB cable and AC charger was plugged on. 
-      elan_ktf3k_ts_set_power_source(private_ts->client, 1); // Parrotgeek1 mod 
+/* ParrotGeek Mod */
+	if (parrot_mod)
+		elan_ktf3k_ts_set_power_source(private_ts->client, 1);
+	else
+		elan_ktf3k_ts_set_power_source(private_ts->client, power_source != USB_NO_Cable);
+      
 }
 
 void touch_callback(unsigned cable_status){ 
@@ -1793,8 +1837,14 @@ static int elan_ktf3k_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	rc = cancel_work_sync(&ts->work);
 	if (rc)
 		enable_irq(client->irq);
-
-
+        if(work_lock ==0) {
+/* ParrotGeek Mod */
+		if (parrot_mod) 
+			rc = elan_ktf3k_ts_rough_calibrate(client);
+/* End ParrotGeek Mod */
+		rc = elan_ktf3k_ts_set_power_state(client, PWR_STATE_DEEP_SLEEP);
+		
+        }
 	//scr_suspended = true;
 
 #ifdef CONFIG_STATE_NOTIFIER
